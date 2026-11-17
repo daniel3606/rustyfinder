@@ -1,0 +1,29 @@
+[package]
+name = "rustyfinder-remote"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+rustyfinder-core.workspace = true
+thiserror.workspace = true
+libc.workspace = true
+russh-sftp = "3"
+suppaftp = { version = "12", features = ["native-tls", "deprecated"] }
+native-tls = "0.2"
+sha2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+encoding_rs.workspace = true
+chardetng.workspace = true
+ureq = { version = "3", default-features = false, features = ["native-tls-no-default"] }
+roxmltree = "0.21"
+md-5.workspace = true
+aws-sdk-s3 = { version = "1", features = ["behavior-version-latest"] }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "time", "sync", "net", "macros"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+md-5.workspace = true
+encoding_rs.workspace = true

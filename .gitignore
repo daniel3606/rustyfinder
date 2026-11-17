@@ -1,0 +1,25 @@
+/target
+/build
+/.testdata
+/RustyFinderApp/Generated
+/RustyFinderApp/RustyFinder.xcodeproj
+.DS_Store
+*.xcuserstate
+xcuserdata/
+RustyFinderApp/Support/Info.plist
+# Never commit secrets or signing material
+.env
+.env.*
+*.p12
+*.cer
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+/dist
+
+# Agent worktrees and local Claude settings
+/.claude/
+# ...except the local test fixture (a throwaway self-signed localhost key)
+!/crates/rustyfinder-remote/tests/support/tls/localhost.p12
+!/crates/rustyfinder-remote/tests/support/tls/cert.pem

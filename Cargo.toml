@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = ["crates/rustyfinder-core", "crates/rustyfinder-remote", "crates/rustyfinder-ffi", "crates/uniffi-bindgen"]
+# Patched third-party crates (see each one's VENDORED.md).
+exclude = ["vendor"]
+
+[patch.crates-io]
+russh-sftp = { path = "vendor/russh-sftp" }
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+rustyfinder-core = { path = "crates/rustyfinder-core" }
+rustyfinder-remote = { path = "crates/rustyfinder-remote" }
+thiserror = "2"
+uniffi = "0.32"
+unicode-normalization = "0.1"
+tempfile = "3"
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+encoding_rs = "0.8"
+flate2 = "1"
+md-5 = "0.10"
+sha1 = "0.10"
+sha2 = "0.10"
+regex = "1"
+chardetng = "1"
+notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
+lzma-rs = "0.3"
+ruzstd = "0.9"
+sevenz-rust2 = "0.24"
+unrar = "0.5"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = "debuginfo"
