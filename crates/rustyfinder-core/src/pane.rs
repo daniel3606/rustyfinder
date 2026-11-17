@@ -107,6 +107,9 @@ struct Inner {
     /// an automatic reload never cancels a navigation the user asked for.
     loading: AtomicU64,
     refresh_pending: AtomicBool,
+    /// The folder changed while something was loading: reload once that
+    /// load is done, or the change would be lost (nothing else notices).
+    reload_after: AtomicBool,
     /// Bumped whenever a search starts or ends; a running search stops
     /// when it no longer holds the current number.
     search_generation: AtomicU64,
@@ -152,6 +155,7 @@ impl PaneController {
                 generation: AtomicU64::new(0),
                 loading: AtomicU64::new(0),
                 refresh_pending: AtomicBool::new(false),
+                reload_after: AtomicBool::new(false),
                 search_generation: AtomicU64::new(0),
                 search_stopped: AtomicU64::new(0),
             }),
@@ -511,6 +515,17 @@ fn publish_results(
     inner.observer.snapshot_ready(snapshot, state);
 }
 
+/// At the end of a load: a change noticed meanwhile gets its reload now.
+struct ReloadAfter(Arc<Inner>);
+
+impl Drop for ReloadAfter {
+    fn drop(&mut self) {
+        if self.0.reload_after.swap(false, Ordering::SeqCst) {
+            start(&self.0, Intent::AutoReload);
+        }
+    }
+}
+
 fn start(inner: &Arc<Inner>, intent: Intent) {
     let inner = Arc::clone(inner);
     // Under the state lock, so an automatic reload and a navigation can't
@@ -523,7 +538,11 @@ fn start(inner: &Arc<Inner>, intent: Intent) {
         if matches!(intent, Intent::AutoReload) {
             // A change noticed while search results are on show must not
             // swap them for the folder.
-            if st.search.is_some() || inner.loading.load(Ordering::SeqCst) > 0 {
+            if st.search.is_some() {
+                return;
+            }
+            if inner.loading.load(Ordering::SeqCst) > 0 {
+                inner.reload_after.store(true, Ordering::SeqCst);
                 return;
             }
         }
@@ -564,6 +583,8 @@ fn start(inner: &Arc<Inner>, intent: Intent) {
     let (view, base_view) = view;
 
     spawn(move || {
+        // Runs when this load is over, whichever way it ends.
+        let _after = ReloadAfter(Arc::clone(&inner));
         let path = location.path.clone();
         // A connection that has been closed has no backend any more.
         let vfs = inner.registry.get(location.conn);
@@ -1052,9 +1073,18 @@ mod tests {
         thread::sleep(Duration::from_millis(400)); // let the watcher arm
 
         fs::write(format!("{a}/appeared.txt"), b"x").unwrap();
-        let (snap, st) = ready(&rx);
-        assert_eq!(st.reason, SnapshotReason::Reloaded);
-        assert!(snap.index_of("appeared.txt").is_some());
+        // A refresh already under way (the watcher can still be reporting
+        // the folder's creation) may land first without the new file; the
+        // file must show in a refresh that follows, within the deadline.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let (snap, st) = ready(&rx);
+            assert_eq!(st.reason, SnapshotReason::Reloaded);
+            if snap.index_of("appeared.txt").is_some() {
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline, "the new file never showed up");
+        }
     }
 
     #[test]
@@ -1099,7 +1129,16 @@ mod tests {
         pane.navigate(&root);
         ready(&rx);
         pane.navigate_quiet(&format!("{root}/missing"));
-        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        // No failure is reported. (An automatic refresh of the folder may
+        // still arrive: the watcher can see the files `tree()` just made.)
+        let deadline = std::time::Instant::now() + Duration::from_millis(300);
+        while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
+            match rx.recv_timeout(left) {
+                Ok(Event::Failed(path, error)) => panic!("quiet navigation reported {path}: {error}"),
+                Ok(Event::Ready(_, st)) => assert_eq!(st.path, root, "only the folder itself may refresh"),
+                Err(_) => break,
+            }
+        }
         assert_eq!(pane.current_path().as_deref(), Some(root.as_str()));
     }
 
