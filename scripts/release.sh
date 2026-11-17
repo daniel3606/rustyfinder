@@ -15,5 +15,6 @@ mkdir -p dist
 ZIP="dist/RustyFinder-$VERSION-macOS-$ARCH.zip"
 rm -f "$ZIP"
 ditto -c -k --keepParent build/RustyFinder.app "$ZIP"
-shasum -a 256 "$ZIP" | tee "$ZIP.sha256"
+# Checksum by bare file name, so `shasum -c` works next to the download.
+(cd dist && shasum -a 256 "$(basename "$ZIP")") | tee "$ZIP.sha256"
 echo "Packed $ZIP"
