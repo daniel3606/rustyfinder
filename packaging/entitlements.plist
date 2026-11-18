@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Used only for Developer ID builds, which run with the hardened runtime.
+	     RustyFinder sends Apple events to Finder (Empty Trash, Finder comments)
+	     and runs osascript for "Retry as Administrator"; the hardened runtime
+	     blocks Apple events unless this is present. macOS still asks the user
+	     before the first event is sent. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>

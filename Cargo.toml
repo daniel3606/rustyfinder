@@ -8,7 +8,7 @@ exclude = ["vendor"]
 russh-sftp = { path = "vendor/russh-sftp" }
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 license = "MIT"
 publish = false

@@ -7,6 +7,11 @@
 <p align="center">A fast, native, local-first file manager for macOS, powered by Rust.</p>
 
 <p align="center">
+  <a href="https://github.com/daniel3606/rustyfinder/releases/latest"><img src="https://img.shields.io/badge/Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>
+  <a href="#install-with-homebrew"><img src="https://img.shields.io/badge/Install_with_Homebrew-FBB040?style=for-the-badge&logo=homebrew&logoColor=black" alt="Install with Homebrew"></a>
+</p>
+
+<p align="center">
   <img src="docs/images/main.png" width="900" alt="RustyFinder with two panes, a preview and the sidebar">
 </p>
 
@@ -90,9 +95,44 @@ workspaces that save a whole window under a name.
 
 ## Install
 
-RustyFinder needs **macOS 26** on Apple silicon.
+RustyFinder needs a Mac with **Apple silicon** and **macOS 26 (Tahoe)** or later.
 
-Build it and put it in `/Applications`:
+### Download for macOS
+
+1. Download `RustyFinder-<version>-macOS-arm64.dmg` from the
+   [latest release](https://github.com/daniel3606/rustyfinder/releases/latest).
+2. Open it and drag **RustyFinder** onto **Applications**.
+3. Open RustyFinder. The first time, macOS refuses because the app is not
+   notarized yet: choose **Open Anyway** in System Settings › Privacy &
+   Security, then open it again.
+
+A `.zip` of the same app sits next to the DMG. `SHA256SUMS.txt` lists the
+checksums; check a download with `shasum -a 256 -c SHA256SUMS.txt`.
+
+### Install with Homebrew
+
+```bash
+brew install --cask daniel3606/tap/rustyfinder
+```
+
+Homebrew downloads the release zip, checks its SHA-256 and puts the app in
+`/Applications`. The first launch needs **Open Anyway** as above, and so
+does the first launch after each upgrade.
+
+```bash
+brew upgrade --cask rustyfinder
+```
+
+```bash
+brew uninstall --cask rustyfinder
+```
+
+Uninstalling keeps your settings, favorites and saved session; add `--zap`
+to remove those too. Homebrew does not replace a copy it did not install:
+if RustyFinder is already in `/Applications` from the DMG or
+`scripts/install.sh`, move it to the Trash first (your settings stay).
+
+### Build it yourself
 
 ```bash
 git clone https://github.com/daniel3606/rustyfinder.git
@@ -102,11 +142,8 @@ git clone https://github.com/daniel3606/rustyfinder.git
 cd rustyfinder && scripts/install.sh
 ```
 
-`scripts/install.sh --user` installs into `~/Applications` instead. The app
-is ad-hoc signed, not notarized by Apple: it runs as an app you built
-yourself. A zip from the Releases page has to be allowed once in System
-Settings › Privacy & Security.
-
+`scripts/install.sh --user` installs into `~/Applications` instead. An app
+you build yourself is ad-hoc signed and runs without the Gatekeeper prompt.
 To update, pull and run `scripts/install.sh` again. To remove it, run
 `scripts/uninstall.sh` (add `--purge` to also move its settings to the
 Trash).
@@ -128,7 +165,9 @@ The script builds the Rust core as a static library, wraps it in an
 XCFramework, generates the Swift bindings with UniFFI, generates the Xcode
 project and builds `build/RustyFinder.app`. `--debug` builds the Swift side
 in Debug; `--check` runs clippy and the Rust tests first.
-`scripts/release.sh` packs a zip for a release.
+`scripts/release.sh` runs the checks, builds and packs the release DMG and
+ZIP into `dist/`; [docs/RELEASING.md](docs/RELEASING.md) explains releases,
+the Homebrew cask and signing.
 
 ## Tests
 
@@ -205,6 +244,7 @@ crates/uniffi-bindgen       generates the Swift bindings
 RustyFinderApp/             the AppKit app (XcodeGen project)
 vendor/russh-sftp           patched SFTP client (lossless non-UTF-8 names)
 scripts/                    build, install, release, UI checks, icon
+packaging/                  DMG window, signing entitlements
 docs/spec/                  the functional specs the app is built from
 docs/GAPS.md                what the specs ask for and its status
 docs/DECISIONS.md           design decisions and their reasons
@@ -232,8 +272,11 @@ login keychain under "RustyFinder".
 
 ## Known limitations
 
-- Apple silicon and macOS 26 only, as built here.
-- Not notarized: it is ad-hoc signed.
+- Apple silicon and macOS 26 only. An Intel build is not shipped because
+  it has not been tested on an Intel Mac.
+- Not notarized: releases are ad-hoc signed, so macOS asks for **Open
+  Anyway** on first launch and after each upgrade. See
+  [docs/RELEASING.md](docs/RELEASING.md#signing-and-notarization).
 - Tested against local scripted servers; SMB/NFS mounting, Bonjour
   discovery and keyboard-interactive SSH need real servers to verify. The
   full list, with reasons, is at the end of [docs/GAPS.md](docs/GAPS.md).
