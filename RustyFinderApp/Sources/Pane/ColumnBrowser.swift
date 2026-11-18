@@ -502,6 +502,14 @@ final class SideColumn: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMe
         return URL(fileURLWithPath: fullPath(of: rows[row])) as NSURL
     }
 
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
+        DragTrace.note("column drag begin rows=\(rowIndexes.count) at=\(screenPoint) mode=\(DragTrace.mainMode)")
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        DragTrace.note("column drag END op=\(operation.rawValue) at=\(screenPoint) mode=\(DragTrace.mainMode) \(DragTrace.buttons)")
+    }
+
     func reloadForTextSize() {
         table.rowHeight = CGFloat(AppEnvironment.shared.settings.listTextSize) + 9
         table.reloadData()

@@ -49,7 +49,9 @@ final class FileGridView: NSCollectionView, NSUserInterfaceValidations {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let onItem = indexPathForItem(at: point) != nil
+        DragTrace.note("grid mouseDown enter clicks=\(event.clickCount)")
         super.mouseDown(with: event)
+        DragTrace.note("grid mouseDown exit \(DragTrace.buttons)")
         // A double-click on empty space must do nothing.
         if event.clickCount == 2, onItem { onDoubleClick?() }
     }

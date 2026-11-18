@@ -25,9 +25,17 @@ final class FileTableView: NSTableView {
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
-        super.draggingEnded(sender)
+        // NSTableView has no draggingEnded: of its own (it is an optional
+        // protocol method), yet Swift compiles the super call. Made anyway,
+        // it throws "unrecognized selector" inside AppKit's drag completion,
+        // which then never finishes: macOS keeps the drag alive and blocks
+        // Mission Control, Cmd-Tab and Spaces until the app quits.
+        if Self.superHasDraggingEnded { super.draggingEnded(sender) }
         onDragExit?()
     }
+
+    private static let superHasDraggingEnded =
+        NSTableView.instancesRespond(to: #selector(NSDraggingDestination.draggingEnded(_:)))
 
     weak var keyHandler: FileTableKeyHandler?
 
@@ -54,7 +62,9 @@ final class FileTableView: NSTableView {
         let column = self.column(at: point)
         let wasOnlySelected = row >= 0 && selectedRowIndexes == [row]
         let hadFocus = window?.firstResponder === self
+        DragTrace.note("table mouseDown enter clicks=\(event.clickCount)")
         super.mouseDown(with: event)
+        DragTrace.note("table mouseDown exit \(DragTrace.buttons)")
         let onName = column >= 0 && tableColumns[column].identifier.rawValue == "name"
         if event.clickCount == 1, wasOnlySelected, hadFocus, onName, event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty {
             onSlowClick?(row)

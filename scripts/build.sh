@@ -4,7 +4,7 @@
 #
 #   scripts/build.sh            release build, output in build/RustyFinder.app
 #   scripts/build.sh --debug    debug Swift build (Rust stays release)
-#   scripts/build.sh --check    also run clippy and the Rust tests first
+#   scripts/build.sh --check    also run clippy, the Rust tests and the drag-end check first
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -36,6 +36,8 @@ if [ "$CHECK" = 1 ]; then
   step "clippy + tests"
   cargo clippy --all-targets -- -D warnings
   cargo test --quiet -- --test-threads=4
+  step "drag-end check"
+  scripts/dnd-diag/check-dragging-ended.sh
 fi
 
 # Build every Apple target whose standard library is installed. Homebrew
