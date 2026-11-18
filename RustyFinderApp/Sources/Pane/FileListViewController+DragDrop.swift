@@ -117,6 +117,16 @@ extension FileListViewController {
         return true
     }
 
+    func collectionView(_ collectionView: NSCollectionView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forItemsAt indexPaths: Set<IndexPath>) {
+        guard DragTrace.enabled else { return }
+        DragTrace.note("grid drag begin items=\(indexPaths.count) at=\(screenPoint) mode=\(DragTrace.mainMode)")
+        for path in indexPaths { DragTrace.writer(self.collectionView(collectionView, pasteboardWriterForItemAt: path), row: path.item) }
+    }
+
+    func collectionView(_ collectionView: NSCollectionView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, dragOperation operation: NSDragOperation) {
+        DragTrace.note("grid drag END op=\(operation.rawValue) at=\(screenPoint) mode=\(DragTrace.mainMode) \(DragTrace.buttons)")
+    }
+
     // MARK: Source
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow tableRow: Int) -> NSPasteboardWriting? {
@@ -131,6 +141,16 @@ extension FileListViewController {
         // A remote item is a promise: downloaded where it is dropped.
         if isRemote, let entry = content.row(at: row) { return remoteDragWriter(for: path, row: entry) }
         return URL(fileURLWithPath: path) as NSURL
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
+        guard DragTrace.enabled else { return }
+        DragTrace.note("list drag begin rows=\(rowIndexes.count) at=\(screenPoint) mode=\(DragTrace.mainMode)")
+        for row in rowIndexes { DragTrace.writer(self.tableView(tableView, pasteboardWriterForRow: row), row: row) }
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        DragTrace.note("list drag END op=\(operation.rawValue) at=\(screenPoint) mode=\(DragTrace.mainMode) \(DragTrace.buttons)")
     }
 
     // MARK: Destination

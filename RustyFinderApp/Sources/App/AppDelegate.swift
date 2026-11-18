@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        DragTrace.start()
         let menu = MainMenu.build()
         NSApp.mainMenu = menu
         // The menus as built are the default shortcuts; the user's

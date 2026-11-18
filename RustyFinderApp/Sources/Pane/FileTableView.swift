@@ -62,7 +62,9 @@ final class FileTableView: NSTableView {
         let column = self.column(at: point)
         let wasOnlySelected = row >= 0 && selectedRowIndexes == [row]
         let hadFocus = window?.firstResponder === self
+        DragTrace.note("table mouseDown enter clicks=\(event.clickCount)")
         super.mouseDown(with: event)
+        DragTrace.note("table mouseDown exit \(DragTrace.buttons)")
         let onName = column >= 0 && tableColumns[column].identifier.rawValue == "name"
         if event.clickCount == 1, wasOnlySelected, hadFocus, onName, event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty {
             onSlowClick?(row)
