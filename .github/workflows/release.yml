@@ -1,0 +1,201 @@
+name: Release
+
+# Push a tag named after the version in RustyFinderApp/project.yml to release:
+#
+#   git tag v1.2.3 && git push origin v1.2.3
+#
+# The workflow builds and tests the app, packs a DMG and a ZIP with SHA-256
+# checksums, publishes the GitHub release and points the Homebrew cask in
+# daniel3606/homebrew-tap at it. An existing release is never overwritten.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, test and package
+    runs-on: macos-26 # Apple silicon
+    env:
+      # Secrets cannot appear in `if:`; this says only whether one is set.
+      HAS_DEVELOPER_ID: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      signing: ${{ steps.package.outputs.signing }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the app version
+        id: version
+        run: |
+          VERSION="$(sed -n 's/^ *MARKETING_VERSION: "\(.*\)"/\1/p' RustyFinderApp/project.yml)"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match MARKETING_VERSION $VERSION in RustyFinderApp/project.yml"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: brew install xcodegen
+
+      # Only when the repository has Developer ID secrets (see docs/RELEASING.md).
+      # Without them the app is ad-hoc signed and not notarized.
+      - name: Import Developer ID certificate
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_API_KEY_BASE64: ${{ secrets.NOTARY_API_KEY_BASE64 }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER: ${{ secrets.NOTARY_API_ISSUER }}
+        if: env.HAS_DEVELOPER_ID == 'true'
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$DEVELOPER_ID_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$KEYCHAIN" \
+            -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
+            | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)"
+          [ -n "$IDENTITY" ] || { echo "::error::No Developer ID Application identity in the certificate"; exit 1; }
+          echo "DEVELOPER_ID_APPLICATION=$IDENTITY" >> "$GITHUB_ENV"
+          if [ -n "$NOTARY_API_KEY_BASE64" ]; then
+            echo "$NOTARY_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary-key.p8"
+            {
+              echo "NOTARY_API_KEY_PATH=$RUNNER_TEMP/notary-key.p8"
+              echo "NOTARY_API_KEY_ID=$NOTARY_API_KEY_ID"
+              echo "NOTARY_API_ISSUER=$NOTARY_API_ISSUER"
+            } >> "$GITHUB_ENV"
+          fi
+
+      # fmt, clippy, the Rust tests and the drag-end check, then the build
+      # and the DMG and ZIP (scripts/release.sh is the same locally).
+      - name: Build, test and package
+        id: package
+        run: |
+          scripts/release.sh
+          echo "signing=$(cat build/package/signing.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Packed app starts
+        run: |
+          SCRATCH="$(mktemp -d)"
+          mkdir -p "$SCRATCH/support" "$SCRATCH/trash"
+          ditto -x -k dist/RustyFinder-*-macOS-arm64.zip "$SCRATCH/app"
+          # --dump prints the first window's state and quits; the scratch
+          # folders keep it away from any real settings or Trash.
+          RUSTYFINDER_SUPPORT_DIR="$SCRATCH/support" RUSTYFINDER_TRASH_DIR="$SCRATCH/trash" \
+            perl -e 'alarm 120; exec @ARGV' \
+            "$SCRATCH/app/RustyFinder.app/Contents/MacOS/RustyFinder" --keys "" --dump | tee "$SCRATCH/dump.txt"
+          grep -q '^layout: ' "$SCRATCH/dump.txt"
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/notary-key.p8"
+          if [ -f "$RUNNER_TEMP/signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/signing.keychain-db"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.sha256
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build.outputs.version }}
+      SIGNING: ${{ needs.build.outputs.signing }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Checksums still match
+        run: cd dist && sha256sum -c SHA256SUMS.txt
+      - name: Release notes
+        run: scripts/release-notes.sh "$VERSION" "$SIGNING" > "$RUNNER_TEMP/notes.md"
+      - name: Create release
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::error::Release $GITHUB_REF_NAME already exists; it is never overwritten. Delete it first to publish again."
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "RustyFinder $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+            dist/*.dmg dist/*.zip dist/*.sha256 dist/SHA256SUMS.txt
+
+  homebrew:
+    name: Update Homebrew cask
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      HAS_TAP_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY != '' }}
+    steps:
+      - name: Deploy key present
+        if: env.HAS_TAP_KEY != 'true'
+        run: |
+          echo "::error::HOMEBREW_TAP_DEPLOY_KEY is not set, so the cask was not updated. See docs/RELEASING.md."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          repository: daniel3606/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: tap
+      - name: Download the released zip and checksum it
+        id: zip
+        run: |
+          ZIP="RustyFinder-$VERSION-macOS-arm64.zip"
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          curl -fsSL --retry 5 -o "$ZIP" "$BASE/$ZIP"
+          curl -fsSL --retry 5 -o "$ZIP.sha256" "$BASE/$ZIP.sha256"
+          sha256sum -c "$ZIP.sha256"
+          echo "sha256=$(cut -d' ' -f1 "$ZIP.sha256")" >> "$GITHUB_OUTPUT"
+      - name: Bump the cask
+        env:
+          SHA256: ${{ steps.zip.outputs.sha256 }}
+        run: |
+          CASK=tap/Casks/rustyfinder.rb
+          sed -i -E \
+            -e "s/^  version \"[^\"]*\"/  version \"$VERSION\"/" \
+            -e "s/^  sha256 \"[0-9a-f]{64}\"/  sha256 \"$SHA256\"/" "$CASK"
+          grep -q "^  version \"$VERSION\"$" "$CASK"
+          grep -q "^  sha256 \"$SHA256\"$" "$CASK"
+          cd tap
+          if git diff --quiet; then
+            echo "The cask already points at $VERSION."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "rustyfinder $VERSION"
+          git push origin HEAD:main

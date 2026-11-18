@@ -40,16 +40,13 @@ if [ "$CHECK" = 1 ]; then
   scripts/dnd-diag/check-dragging-ended.sh
 fi
 
-# Build every Apple target whose standard library is installed. Homebrew
-# Rust ships only the host target, so the result is single-arch there;
-# with rustup and both targets added it becomes a universal binary.
-TARGETS=()
-for t in aarch64-apple-darwin x86_64-apple-darwin; do
-  if [ -d "$(rustc --print target-libdir --target "$t" 2>/dev/null)" ]; then
-    TARGETS+=("$t")
-  fi
-done
-[ ${#TARGETS[@]} -gt 0 ] || { echo "no usable Rust target found" >&2; exit 1; }
+# RustyFinder ships for Apple silicon only. An Intel slice would build,
+# but nobody has run or tested it on an Intel Mac, so it is not shipped.
+TARGETS=(aarch64-apple-darwin)
+if [ ! -d "$(rustc --print target-libdir --target aarch64-apple-darwin 2>/dev/null)" ]; then
+  echo "the aarch64-apple-darwin Rust standard library is missing" >&2
+  exit 1
+fi
 
 LIBS=()
 ARCHS=()

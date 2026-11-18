@@ -2337,7 +2337,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rustyfinder-core"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "chardetng",
  "encoding_rs",
@@ -2361,7 +2361,7 @@ dependencies = [
 
 [[package]]
 name = "rustyfinder-ffi"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "rustyfinder-core",
  "rustyfinder-remote",
@@ -2373,7 +2373,7 @@ dependencies = [
 
 [[package]]
 name = "rustyfinder-remote"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "aws-sdk-s3",
  "chardetng",
@@ -3112,7 +3112,7 @@ dependencies = [
 
 [[package]]
 name = "uniffi-bindgen"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "uniffi",
 ]

@@ -1,20 +1,16 @@
 #!/bin/bash
-# Build a Release RustyFinder.app and pack it for a GitHub release:
-# dist/RustyFinder-<version>-macOS-<arch>.zip and its SHA-256.
+# Build, test and pack a release locally: the same steps as the Release
+# workflow (.github/workflows/release.yml) without publishing anything.
 #
-# The app is ad-hoc signed and not notarized. People who download it will
-# have to allow it in System Settings › Privacy & Security the first time.
+#   scripts/release.sh     -> dist/RustyFinder-<version>-macOS-arm64.{dmg,zip}
+#                             plus .sha256 files and SHA256SUMS.txt
+#
+# Without Developer ID credentials in the environment (see scripts/package.sh)
+# the app is ad-hoc signed and not notarized.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+cargo fmt --all --check
 scripts/build.sh --check
-VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/RustyFinder.app/Contents/Info.plist)"
-ARCH="$(lipo -archs build/RustyFinder.app/Contents/MacOS/RustyFinder | tr ' ' '+')"
-mkdir -p dist
-ZIP="dist/RustyFinder-$VERSION-macOS-$ARCH.zip"
-rm -f "$ZIP"
-ditto -c -k --keepParent build/RustyFinder.app "$ZIP"
-# Checksum by bare file name, so `shasum -c` works next to the download.
-(cd dist && shasum -a 256 "$(basename "$ZIP")") | tee "$ZIP.sha256"
-echo "Packed $ZIP"
+scripts/package.sh
